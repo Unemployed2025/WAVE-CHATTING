@@ -127,26 +127,25 @@ const searchUsers = async (req, res) => {
     try {
         const { query } = req.query;
         const currentUserId = req.user.user_id;
-        const limit = parseInt(req.query.limit) || 5; // Reduced limit for faster response
 
-        // Require minimum 2 characters for search
+        // Validate query length
         if (!query || query.length < 2) {
             return res.status(400).json({
                 success: false,
-                message: "Search query must be at least 2 characters"
+                message: "Search query must be at least 2 characters",
+                users: []
             });
         }
 
-        // Use starts with for better performance
         const [users] = await pool.query(`
-            SELECT /*+ INDEX(Users idx_users_username) */
+            SELECT 
                 user_id,
                 username,
                 full_name,
                 avatar_url,
                 is_online,
-                (SELECT 
-                    EXISTS (
+                (
+                    SELECT EXISTS(
                         SELECT 1 FROM Friendships 
                         WHERE (user_one_id = Users.user_id AND user_two_id = ?) 
                         OR (user_two_id = Users.user_id AND user_one_id = ?)
@@ -158,14 +157,13 @@ const searchUsers = async (req, res) => {
                 AND user_id != ? 
                 AND deleted_at IS NULL 
                 AND is_active = true
-            LIMIT ?
+            LIMIT 10
         `, [
-            currentUserId, 
-            currentUserId, 
-            `${query}%`,  // Changed to starts with
-            `${query}%`,  // Changed to starts with
-            currentUserId, 
-            limit
+            currentUserId,
+            currentUserId,
+            `${query}%`,
+            `${query}%`,
+            currentUserId
         ]);
 
         res.status(200).json({
@@ -175,12 +173,13 @@ const searchUsers = async (req, res) => {
                 username: user.username,
                 fullName: user.full_name,
                 avatarUrl: user.avatar_url,
-                isOnline: user.is_online,
+                isOnline: Boolean(user.is_online),
                 isFriend: Boolean(user.is_friend)
             }))
         });
 
     } catch (error) {
+        console.error('Search error:', error);
         res.status(500).json({
             success: false,
             message: "Error searching users",
