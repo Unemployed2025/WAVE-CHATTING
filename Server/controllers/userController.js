@@ -73,15 +73,20 @@ const login = async (req, res) => {
         const token = jwt.sign(
             { user_id: user.user_id, username: user.username },
             process.env.JWT_SECRET,
-            { expiresIn: '24h' }
+            { expiresIn: '5d' }
         );
-
+        const cookieOptions = {
+            expires: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000), // 5 days in milliseconds
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
+            sameSite: 'strict'
+          };
         // Update last_seen and is_online
         await pool.query(
             'UPDATE Users SET last_seen = NOW(), is_online = true WHERE user_id = ?',
             [user.user_id]
         );
-
+        res.cookie('token', token, cookieOptions);
         res.status(200).json({
             message: "Login successful",
             token,
