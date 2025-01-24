@@ -3,7 +3,7 @@ import { formatLastSeen } from '../../utils/dateFormatter';
 
 function FriendCard({ friend, onSelect, isSelected }) {
   return (
-    <div 
+    <div
       onClick={() => onSelect(friend)}
       className={`flex items-center px-4 py-3 cursor-pointer hover:bg-[#202b36] transition-colors
         ${isSelected ? 'bg-[#2b5278]' : ''}`}
@@ -14,9 +14,11 @@ function FriendCard({ friend, onSelect, isSelected }) {
           alt={friend.username}
           className="w-12 h-12 rounded-full object-cover"
         />
-        {friend.isOnline && (
+        {friend.isOnline == 1 ? (
           <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-teal-400 border-2 border-[#17212b]" />
-        )}
+        ) :
+          <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-gray-400 border-2 border-[#17212b]" />
+        }
       </div>
       <div className="ml-3 flex-1 min-w-0">
         <div className="flex justify-between">
