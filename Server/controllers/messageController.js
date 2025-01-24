@@ -7,7 +7,7 @@ const getMessagesBetweenUsers = async (req, res) => {
         const currentUserId = req.user.user_id;
         const { friendId } = req.params;
         
-        console.log(currentUserId, friendId);
+        // console.log(currentUserId, friendId);
         // Find conversations between these users
         const [messages] = await pool.query(`
             SELECT 
@@ -115,6 +115,7 @@ const saveMessage = async (senderId, recipientId, content) => {
         throw error;
     }
 };
+
 module.exports = {
     getMessagesBetweenUsers,
     saveMessage

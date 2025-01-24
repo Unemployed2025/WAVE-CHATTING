@@ -17,8 +17,15 @@ export const userAPI = {
     },
 
     searchUsers: async (query) => {
-        const response = await axios.get(`/users/search?query=${query}`);
-        return response.data;
+        try {
+            console.log('Searching for:', query);
+            const response = await axios.get(`/users/search?query=${encodeURIComponent(query)}`);
+            console.log('Search response:', response.data);
+            return response.data;
+          } catch (error) {
+            console.error('Search API error:', error.response || error);
+            throw error;
+          }
     },
 
     getCurrentUserId: async () => {

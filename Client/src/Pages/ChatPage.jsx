@@ -1,71 +1,88 @@
-import { useRef, useEffect } from "react"
+import { useRef, useState } from "react"
+import { useNavigate } from "react-router-dom"
+import { userAPI } from "../../api/userRoute"
 import SearchFriendForm from "../Component/ChatPage/SearchFriendForm"
 import PendingRequest from "../Component/ChatPage/PendingRequest"
 import FriendGrid from "../Component/ChatPage/FriendGrid"
+import MessageSpace from "../Component/ChatPage/MessageSpace"
 import gsap from "gsap"
 
 function ChatPage() {
   const pageRef = useRef(null)
+  const navigate = useNavigate()
+  const [selectedFriend, setSelectedFriend] = useState(null)
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const [isSearching, setIsSearching] = useState(false);
 
-  useEffect(() => {
-    // Set initial opacity to 1
-    gsap.set(pageRef.current, { opacity: 1 });
-    
-    // Animate from bottom instead of using opacity
-    gsap.from(pageRef.current, {
-      y: 20,
-      duration: 0.5,
-      ease: "power2.out"
-    })
-  }, [])
+  const handleFriendSelect = (friend) => {
+    setSelectedFriend(friend)
+  }
+  const handleSearchStateChange = (searching) => {
+    setIsSearching(searching);
+  };
+  const handleLogout = async () => {
+    try {
+      setIsLoggingOut(true)
+      await userAPI.logout()
+      localStorage.removeItem('token')
+
+      // Animate out
+      gsap.to(pageRef.current, {
+        opacity: 0,
+        y: -20,
+        duration: 0.5,
+        ease: "power2.in",
+        onComplete: () => navigate('/login')
+      })
+    } catch (error) {
+      console.error('Logout error:', error)
+      setIsLoggingOut(false)
+    }
+  }
 
   return (
-    <div 
-      ref={pageRef}
-      className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 opacity-100" // Add opacity-100
-    >
-      {/* Header - Add backdrop blur */}
-      <div className="bg-white/80 border-b shadow-sm backdrop-blur-sm sticky top-0 z-50">
-        <div className="max-w-6xl mx-auto px-4 py-3">
-          <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-blue-500 bg-clip-text text-transparent">
-            Wave
-          </h1>
+    <div ref={pageRef} className="h-screen flex flex-col bg-[#17212b]">
+      <div className="flex h-full">
+        {/* Left Sidebar - Menu */}
+        <div className="w-[72px] bg-[#0e1621] flex flex-col items-center py-4 border-r border-[#232e3c]">
+          <div className="mb-6">
+            <h1 className="text-blue-400 text-2xl font-bold">W</h1>
+          </div>
+          <button
+            onClick={handleLogout}
+            disabled={isLoggingOut}
+            className="mt-auto p-3 rounded-full hover:bg-[#232e3c] transition-colors"
+          >
+            <svg className="w-6 h-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+                d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Chat List Sidebar */}
+        <div className="w-[320px] bg-[#17212b] border-r border-[#232e3c]">
+          <div className="p-3">
+            <SearchFriendForm onSearchStateChange={handleSearchStateChange} />
+          </div>
+          <div className="px-2">
+            <PendingRequest />
+          </div>
+          {!isSearching && (
+            <div className="overflow-y-auto">
+              <FriendGrid
+                onFriendSelect={handleFriendSelect}
+                selectedFriend={selectedFriend}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Main Chat Area */}
+        <div className="flex-1 bg-[#0e1621]">
+          <MessageSpace selectedFriend={selectedFriend} />
         </div>
       </div>
-
-      {/* Main Content - Add proper stacking context */}
-      <div className="max-w-6xl mx-auto p-4 relative z-10">
-        <div className="flex flex-col md:flex-row gap-6">
-          {/* Left Sidebar */}
-          <div className="w-full md:w-1/3 lg:w-1/4">
-            <div className="bg-white/95 backdrop-blur-sm rounded-xl shadow-sm border border-gray-200 p-4 mb-4">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-gray-800">Friends</h2>
-                <PendingRequest />
-              </div>
-            </div>
-              <SearchFriendForm />
-            <div className="bg-white/95 backdrop-blur-sm rounded-xl shadow-sm border border-gray-200 p-4">
-              <FriendGrid />
-            </div>
-          </div>
-
-          {/* Right Side - Chat Area */}
-          <div className="flex-1">
-            <div className="bg-white/95 backdrop-blur-sm rounded-xl shadow-sm border border-gray-200 h-[80vh]">
-              <div className="border-b p-4">
-                <h2 className="text-lg font-semibold text-gray-800">Messages</h2>
-              </div>
-              <div className="p-4 text-center text-gray-500">
-                Select a friend to start chatting
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Add a fixed background gradient */}
-      <div className="fixed inset-0 bg-gradient-to-br from-gray-50 to-gray-100 -z-10" />
     </div>
   )
 }

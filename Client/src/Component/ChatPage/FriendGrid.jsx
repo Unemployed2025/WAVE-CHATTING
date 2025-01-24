@@ -1,32 +1,42 @@
-import { useState, useEffect } from 'react'
+import { useEffect } from 'react'
+import PropTypes from 'prop-types'
 import { friendAPI } from '../../../api/friendRoute'
 import FriendCard from './FriendCard'
+import { useFriends } from '../../context/FriendContext'
 
-function FriendGrid() {
-  const [friends, setFriends] = useState([])
+function FriendGrid({ onFriendSelect, selectedFriend }) {
+  const { friends, updateFriends } = useFriends();
 
   useEffect(() => {
     const fetchFriends = async () => {
       try {
-        console.log('Fetching friends list')
-        const response = await friendAPI.getFriendsList()
-        console.log('Friends list:', response.friends)
-        setFriends(response.friends)
+        const response = await friendAPI.getFriendsList();
+        updateFriends(response.friends);
       } catch (error) {
-        console.error('Error fetching friends:', error)
+        console.error('Error fetching friends:', error);
       }
-    }
+    };
 
-    fetchFriends()
-  }, [])
+    fetchFriends();
+  }, [updateFriends]);
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
+    <div className="space-y-2">
       {friends.map(friend => (
-        <FriendCard key={friend.userId} friend={friend} />
+        <FriendCard 
+          key={friend.userId} 
+          friend={friend}
+          onSelect={onFriendSelect}
+          isSelected={selectedFriend?.userId === friend.userId}
+        />
       ))}
     </div>
-  )
+  );
+}
+
+FriendGrid.propTypes = {
+  onFriendSelect: PropTypes.func.isRequired,
+  selectedFriend: PropTypes.object
 }
 
 export default FriendGrid

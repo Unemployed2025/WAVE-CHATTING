@@ -1,28 +1,36 @@
-import PropTypes from 'prop-types'
+import PropTypes from 'prop-types';
+import { formatLastSeen } from '../../utils/dateFormatter';
 
-function FriendCard({ friend }) {
+function FriendCard({ friend, onSelect, isSelected }) {
   return (
-    <div className="flex items-center gap-3 p-3 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors">
+    <div 
+      onClick={() => onSelect(friend)}
+      className={`flex items-center px-4 py-3 cursor-pointer hover:bg-[#202b36] transition-colors
+        ${isSelected ? 'bg-[#2b5278]' : ''}`}
+    >
       <div className="relative">
         <img
           src={friend.avatarUrl || '/default-avatar.png'}
           alt={friend.username}
-          className="w-12 h-12 rounded-full border-2 border-gray-200"
+          className="w-12 h-12 rounded-full object-cover"
         />
-        <span 
-          className={`absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-white ${
-            friend.isOnline ? 'bg-green-500' : 'bg-gray-400'
-          }`}
-        />
+        {friend.isOnline && (
+          <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-teal-400 border-2 border-[#17212b]" />
+        )}
       </div>
-      <div className="flex-1 min-w-0">
-        <h3 className="font-medium text-gray-900 truncate">{friend.username}</h3>
-        <p className="text-sm text-gray-500 truncate">
-          {friend.fullName || 'No status'}
+      <div className="ml-3 flex-1 min-w-0">
+        <div className="flex justify-between">
+          <h3 className="font-medium text-white truncate">{friend.username}</h3>
+          <span className="text-xs text-gray-400 whitespace-nowrap">
+            {friend.isOnline ? 'online' : formatLastSeen(friend.lastSeen)}
+          </span>
+        </div>
+        <p className="text-sm text-gray-400 truncate mt-0.5">
+          {friend.lastMessage || 'No messages yet'}
         </p>
       </div>
     </div>
-  )
+  );
 }
 
 FriendCard.propTypes = {
@@ -31,8 +39,12 @@ FriendCard.propTypes = {
     username: PropTypes.string.isRequired,
     fullName: PropTypes.string,
     avatarUrl: PropTypes.string,
-    isOnline: PropTypes.number
-  }).isRequired
+    isOnline: PropTypes.number,
+    lastSeen: PropTypes.string,
+    lastMessage: PropTypes.string
+  }).isRequired,
+  onSelect: PropTypes.func.isRequired,
+  isSelected: PropTypes.bool
 }
 
 export default FriendCard
