@@ -31,14 +31,23 @@ const register = async (req, res) => {
         const token = jwt.sign(
             { user_id: userId, username },
             process.env.JWT_SECRET,
-            { expiresIn: '24h' }
+            { expiresIn: '5d' }
         );
 
+        const cookieOptions = {
+            expires: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000), // 5 days in milliseconds
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
+            sameSite: 'strict'
+        };
+
+        res.cookie('token', token, cookieOptions);
         res.status(201).json({
             message: "User registered successfully",
             token,
             user: { userId, username, email, fullName }
         });
+
 
     }
     catch (error) {
@@ -80,7 +89,7 @@ const login = async (req, res) => {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
             sameSite: 'strict'
-          };
+        };
         // Update last_seen and is_online
         await pool.query(
             'UPDATE Users SET last_seen = NOW(), is_online = true WHERE user_id = ?',
@@ -104,8 +113,8 @@ const login = async (req, res) => {
 };
 
 //Logout user
-const logout = async (req,res)=>{
-    try{
+const logout = async (req, res) => {
+    try {
         const userId = req.user.user_id;
 
         await pool.query(
@@ -114,14 +123,14 @@ const logout = async (req,res)=>{
         );
 
         res.status(200).json({
-            success:true,
-            message:"Logout successful"
+            success: true,
+            message: "Logout successful"
         });
-    } catch(error){
+    } catch (error) {
         res.status(500).json({
-            success:false,
-            message:"Error logging out",
-            error:error.message
+            success: false,
+            message: "Error logging out",
+            error: error.message
         })
     }
 }
@@ -194,18 +203,18 @@ const searchUsers = async (req, res) => {
 };
 
 //Give CurrentUserId
-const getCurrentUserId = async(req,res)=>{
-    try{
+const getCurrentUserId = async (req, res) => {
+    try {
         const currentUserId = req.user.user_id;
         res.status(200).json({
-            success:true,
+            success: true,
             currentUserId
         });
-    } catch(error){
+    } catch (error) {
         res.status(500).json({
-            success:false,
-            message:"Error fetching current user id",
-            error:error.message
+            success: false,
+            message: "Error fetching current user id",
+            error: error.message
         });
     }
 }

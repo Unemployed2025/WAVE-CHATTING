@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import gsap from 'gsap';
 import { userAPI } from '../../api/userRoute'
+import { FcGoogle } from 'react-icons/fc';
 
 function LoginPage() {
   const [isLogin, setIsLogin] = useState(true);
@@ -12,7 +13,7 @@ function LoginPage() {
     fullName: ''
   });
   const [error, setError] = useState('');
-  
+
   const navigate = useNavigate();
   const formRef = useRef(null);
   const containerRef = useRef(null);
@@ -22,19 +23,19 @@ function LoginPage() {
     // Initial animations
     gsap.set(containerRef.current, { opacity: 0 });
     gsap.set(cardRef.current, { y: 50, opacity: 0 });
-    
+
     const tl = gsap.timeline();
     tl.to(containerRef.current, {
       opacity: 1,
       duration: 1,
       ease: "power2.inOut"
     })
-    .to(cardRef.current, {
-      y: 0,
-      opacity: 1,
-      duration: 0.8,
-      ease: "back.out(1.7)"
-    });
+      .to(cardRef.current, {
+        y: 0,
+        opacity: 1,
+        duration: 0.8,
+        ease: "back.out(1.7)"
+      });
   }, []);
 
   const handleSubmit = async (e) => {
@@ -42,17 +43,17 @@ function LoginPage() {
     setError('');
 
     try {
-      const response = isLogin 
+      const response = isLogin
         ? await userAPI.login({ email: formData.email, password: formData.password })
-        : await userAPI.register({ 
-            email: formData.email, 
-            password: formData.password,
-            username: formData.username,
-            fullName: formData.fullName 
-          });
+        : await userAPI.register({
+          email: formData.email,
+          password: formData.password,
+          username: formData.username,
+          fullName: formData.fullName
+        });
 
       localStorage.setItem('token', response.token);
-      
+
       // Animate out
       gsap.to(cardRef.current, {
         y: -50,
@@ -63,11 +64,6 @@ function LoginPage() {
 
     } catch (err) {
       setError(err.response?.data?.message || 'An error occurred');
-      gsap.to(formRef.current, {
-        x: [-10, 10, -10, 10, 0],
-        duration: 0.4,
-        ease: "power2.inOut"
-      });
     }
   };
 
@@ -88,7 +84,8 @@ function LoginPage() {
   };
 
   return (
-    <div 
+
+    <div
       ref={containerRef}
       className="min-h-screen flex items-center justify-center bg-cover bg-center from-gray-100 via-white to-gray-100"
       style={{
@@ -96,7 +93,7 @@ function LoginPage() {
         opacity: 0
       }}
     >
-      <div 
+      <div
         ref={cardRef}
         className="w-full max-w-md p-8 space-y-8 bg-white rounded-2xl shadow-xl"
       >
@@ -105,8 +102,8 @@ function LoginPage() {
             {isLogin ? 'Welcome Back!' : 'Create Account'}
           </h2>
           <p className="mt-2 text-sm text-gray-600">
-            {isLogin 
-              ? 'Enter your details to sign in' 
+            {isLogin
+              ? 'Enter your details to sign in'
               : 'Fill in your information to get started'}
           </p>
         </div>
@@ -129,7 +126,7 @@ function LoginPage() {
                   type="text"
                   required={!isLogin}
                   value={formData.username}
-                  onChange={(e) => setFormData({...formData, username: e.target.value})}
+                  onChange={(e) => setFormData({ ...formData, username: e.target.value })}
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
@@ -143,7 +140,7 @@ function LoginPage() {
                   type="text"
                   required={!isLogin}
                   value={formData.fullName}
-                  onChange={(e) => setFormData({...formData, fullName: e.target.value})}
+                  onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
@@ -159,7 +156,7 @@ function LoginPage() {
               type="email"
               required
               value={formData.email}
-              onChange={(e) => setFormData({...formData, email: e.target.value})}
+              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
               className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
@@ -173,7 +170,7 @@ function LoginPage() {
               type="password"
               required
               value={formData.password}
-              onChange={(e) => setFormData({...formData, password: e.target.value})}
+              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
               className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
@@ -186,6 +183,16 @@ function LoginPage() {
               {isLogin ? 'Sign In' : 'Sign Up'}
             </button>
           </div>
+          <div className="mt-4">
+            <button
+              type="button"
+              onClick={() => window.location.href = 'http://localhost:3000/api/auth/google'}
+              className="w-full flex items-center justify-center gap-2 py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+            >
+              <FcGoogle className="text-xl" />
+              Continue with Google
+            </button>
+          </div>
         </form>
 
         <div className="text-center">
@@ -193,8 +200,8 @@ function LoginPage() {
             onClick={toggleMode}
             className="text-sm text-blue-600 hover:text-blue-500 transition-colors duration-200"
           >
-            {isLogin 
-              ? "Don't have an account? Sign up" 
+            {isLogin
+              ? "Don't have an account? Sign up"
               : "Already have an account? Sign in"}
           </button>
         </div>

@@ -47,6 +47,7 @@ async function initDatabase() {
 initDatabase()
   .then(() => {
     console.log('Database initialized');
+    pool.end(); // Close all connections in the pool
   })
   .catch(err => {
     console.error('Failed to initialize database:', err);

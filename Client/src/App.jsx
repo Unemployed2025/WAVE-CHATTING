@@ -6,7 +6,7 @@ import ProtectedRoute from './Component/ProtectedRoutes';
 import PublicRoute from './Component/PublicRoute';
 import { SocketProvider } from './context/SocketContext';
 import { FriendProvider } from './context/FriendContext';
-
+import AuthCallback from './Component/AuthCallBack';
 function App() {
   return (
     <FriendProvider>
@@ -23,6 +23,7 @@ function App() {
                 </PublicRoute>
               }
             />
+            <Route path="/auth/callback" element={<AuthCallback />} />
 
             {/* Protected routes */}
             <Route
