@@ -62,6 +62,39 @@ function initSocket(httpServer) {
             }
         });
 
+        // Add to existing socket.io configuration
+        socket.on('join_group', (groupId) => {
+            socket.join(`group_${groupId}`);
+        });
+
+        socket.on('leave_group', (groupId) => {
+            socket.leave(`group_${groupId}`);
+        });
+
+        socket.on('group_message', async ({ groupId, message }) => {
+            try {
+                // Save message to database
+                const messageId = uuidv4();
+                await pool.query(
+                    'INSERT INTO Messages (message_id, conversation_id, sender_id, content) VALUES (?, ?, ?, ?)',
+                    [messageId, groupId, socket.userId, message.content]
+                );
+
+                // Broadcast message to all group members
+                io.to(`group_${groupId}`).emit('receive_group_message', {
+                    ...message,
+                    messageId,
+                    groupId
+                });
+
+            } catch (error) {
+                console.error('Error handling group message:', error);
+                socket.emit('message_error', {
+                    error: 'Failed to send group message'
+                });
+            }
+        });
+
         // Handle disconnection
         socket.on('disconnect', () => {
             // Remove user from online users
