@@ -1,23 +1,14 @@
 const pool = require('../config/database');
 const fs = require('fs').promises;
 const path = require('path');
-const { v4: uuidv4 } = require('uuid');
 
 async function initDatabase() {
-  let connection;
+  const client = await pool.connect();
+  
   try {
-    connection = await pool.getConnection();
+    // Start transaction
+    await client.query('BEGIN');
 
-    // Create UUID generation function
-    await connection.query(`
-      CREATE FUNCTION IF NOT EXISTS uuid_v4()
-      RETURNS CHAR(36)
-      NOT DETERMINISTIC
-      NO SQL
-      BEGIN
-        RETURN UUID();
-      END;
-    `);
     const schemaPath = path.join(__dirname, '..', 'Models', 'Schema.sql');
     const schema = await fs.readFile(schemaPath, 'utf8');
 
@@ -25,31 +16,33 @@ async function initDatabase() {
       .split(';')
       .filter(query => query.trim());
 
-
     for (const query of queries) {
       if (query.trim()) {
-        await connection.query(query);
+        await client.query(query);
       }
     }
 
-    connection.release();
+    // Commit transaction
+    await client.query('COMMIT');
     console.log('Database schema initialized successfully');
+    
   } catch (error) {
+    // Rollback transaction on error
+    await client.query('ROLLBACK');
     console.error('Error initializing database:', error);
     throw error;
+    
   } finally {
-    if (connection) {
-      connection.release();
-    }
+    client.release();
   }
 }
 
 initDatabase()
   .then(() => {
-    console.log('Database initialized');
-    pool.end(); // Close all connections in the pool
+    console.log('Database initialization complete');
+    process.exit(0);
   })
-  .catch(err => {
-    console.error('Failed to initialize database:', err);
+  .catch(error => {
+    console.error('Failed to initialize database:', error);
     process.exit(1);
   });
