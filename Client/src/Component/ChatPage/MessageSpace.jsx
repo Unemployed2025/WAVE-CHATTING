@@ -7,57 +7,30 @@ import TypingIndicator from './TypingIndicator';
 import debounce from 'lodash/debounce';
 import { formatLastSeen } from '../../utils/dateFormatter';
 
-function MessageSpace({ selectedFriend }) {
+function MessageSpace({ selectedFriend, selectedGroup }) {
   const { socket, currentUserId } = useSocket();
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [friendTyping, setFriendTyping] = useState(false);
   const messagesEndRef = useRef(null);
-  const typingTimeoutRef = useRef(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  const debouncedTyping = useCallback(
-    debounce((isTyping) => {
-      if (socket && selectedFriend) {
-        socket.emit('typing', {
-          recipientId: selectedFriend.userId,
-          isTyping
-        });
-      }
-    }, 300),
-    [socket, selectedFriend]
-  );
-
-  const stopTyping = useCallback(() => {
-    if (socket && selectedFriend) {
-      socket.emit('typing', {
-        recipientId: selectedFriend.userId,
-        isTyping: false
-      });
-      setIsTyping(false);
-    }
-  }, [socket, selectedFriend]);
-
+  // Fetch messages when selected friend or group changes
   useEffect(() => {
-    return () => {
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-      }
-      stopTyping();
-      debouncedTyping.cancel();
-    };
-  }, [selectedFriend, stopTyping, debouncedTyping]);
-
-  useEffect(() => {
-    if (!selectedFriend) return;
+    if (!selectedFriend && !selectedGroup) return;
 
     const fetchMessages = async () => {
       try {
-        const response = await messageAPI.getMessagesBetweenUsers(selectedFriend.userId);
+        let response;
+        if (selectedGroup) {
+          response = await messageAPI.getGroupMessages(selectedGroup.groupId);
+        } else {
+          response = await messageAPI.getMessagesBetweenUsers(selectedFriend.userId);
+        }
         setMessages(response.messages);
         scrollToBottom();
       } catch (error) {
@@ -66,96 +39,101 @@ function MessageSpace({ selectedFriend }) {
     };
 
     fetchMessages();
-  }, [selectedFriend]);
 
-  useEffect(() => {
-    if (!socket || !selectedFriend) return;
-
-    const handleReceiveMessage = (message) => {
-      if (message.sender.userId === selectedFriend.userId) {
-        setMessages(prev => [...prev, message]);
-        scrollToBottom();
-      }
-    };
-
-    const handleTyping = ({ userId, isTyping }) => {
-      if (userId === selectedFriend.userId) {
-        setFriendTyping(isTyping);
-      }
-    };
-
-    socket.on('receive_message', handleReceiveMessage);
-    socket.on('user_typing', handleTyping);
-
-    return () => {
-      socket.off('receive_message', handleReceiveMessage);
-      socket.off('user_typing', handleTyping);
-    };
-  }, [socket, selectedFriend]);
-
-  const handleInputChange = (e) => {
-    setNewMessage(e.target.value);
-
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
+    // Join group chat room if group is selected
+    if (selectedGroup && socket) {
+      socket.emit('join_group', selectedGroup.groupId);
+      return () => socket.emit('leave_group', selectedGroup.groupId);
     }
+  }, [selectedFriend, selectedGroup, socket]);
 
-    if (!isTyping) {
-      setIsTyping(true);
-      debouncedTyping(true);
+  // Handle sending messages
+  const handleSendMessage = async (e) => {
+    e.preventDefault();
+    if (!newMessage.trim() || !socket) return;
+
+    try {
+      if (selectedGroup) {
+        // Send group message
+        const response = await messageAPI.sendGroupMessage(selectedGroup.groupId, {
+          content: newMessage
+        });
+        
+        socket.emit('group_message', {
+          groupId: selectedGroup.groupId,
+          message: {
+            content: newMessage,
+            messageId: response.messageId,
+            sender: {
+              userId: currentUserId
+            }
+          }
+        });
+      } else {
+        // Send private message
+        socket.emit('private_message', {
+          recipientId: selectedFriend.userId,
+          message: {
+            content: newMessage,
+            messageId: Date.now().toString(),
+            sender: {
+              userId: currentUserId
+            }
+          }
+        });
+      }
+
+      setNewMessage('');
+      scrollToBottom();
+    } catch (error) {
+      console.error('Error sending message:', error);
     }
-
-    typingTimeoutRef.current = setTimeout(() => {
-      stopTyping();
-    }, 2000);
   };
 
-  const handleSendMessage = (e) => {
-    e.preventDefault();
-    if (!newMessage.trim() || !socket || !selectedFriend) return;
+  // Return header based on selected chat type
+  const renderHeader = () => {
+    if (selectedGroup) {
+      return (
+        <div className="h-[60px] px-4 flex items-center justify-between border-b border-[#232e3c] bg-[#17212b]">
+          <div className="flex items-center">
+            <div className="flex items-center justify-center w-10 h-10 rounded-full bg-blue-500/20">
+              <span className="text-blue-400 font-medium">
+                {selectedGroup.name.substring(0, 2).toUpperCase()}
+              </span>
+            </div>
+            <div className="ml-3">
+              <h3 className="text-white font-medium">{selectedGroup.name}</h3>
+              <p className="text-sm text-gray-400">{selectedGroup.memberCount} members</p>
+            </div>
+          </div>
+        </div>
+      );
+    }
 
-    const messageData = {
-      content: newMessage,
-      messageId: Date.now().toString(),
-      sender: {
-        userId: currentUserId
-      },
-      createdAt: new Date().toISOString()
-    };
-
-    socket.emit('private_message', {
-      recipientId: selectedFriend.userId,
-      message: messageData
-    });
-
-    setMessages(prev => [...prev, messageData]);
-    setNewMessage('');
-    stopTyping();
-    scrollToBottom();
+    return selectedFriend ? (
+      <div className="h-[60px] px-4 flex items-center border-b border-[#232e3c] bg-[#17212b]">
+        <div className="flex items-center">
+          <img
+            src={selectedFriend.avatarUrl || '/default-avatar.png'}
+            alt={selectedFriend.username}
+            className="w-10 h-10 rounded-full object-cover"
+          />
+          <div className="ml-3">
+            <h3 className="text-white font-medium">{selectedFriend.username}</h3>
+            <p className="text-sm text-gray-400">
+              {selectedFriend.isOnline ? 'online' : formatLastSeen(selectedFriend.lastSeen)}
+            </p>
+          </div>
+        </div>
+      </div>
+    ) : null;
   };
 
   return (
     <div className="flex flex-col h-full">
-      {selectedFriend ? (
+      {(selectedFriend || selectedGroup) ? (
         <>
-          {/* Chat Header */}
-          <div className="h-[60px] px-4 flex items-center border-b border-[#232e3c] bg-[#17212b]">
-            <div className="flex items-center">
-              <img
-                src={selectedFriend.avatarUrl || '/default-avatar.png'}
-                alt={selectedFriend.username}
-                className="w-10 h-10 rounded-full object-cover"
-              />
-              <div className="ml-3">
-                <h3 className="text-white font-medium">{selectedFriend.username}</h3>
-                <p className="text-sm text-gray-400">
-                  {selectedFriend.isOnline ? 'online' : formatLastSeen(selectedFriend.lastSeen)}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Messages Area */}
+          {renderHeader()}
           <div className="flex-1 overflow-y-auto px-4 py-6 space-y-4 bg-[#0e1621]">
             {messages.map((message) => (
               <MessageBubble
@@ -164,18 +142,17 @@ function MessageSpace({ selectedFriend }) {
                 isOwnMessage={message.sender.userId === currentUserId}
               />
             ))}
-            {friendTyping && <TypingIndicator />}
+            {friendTyping && !selectedGroup && <TypingIndicator />}
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Message Input */}
           <div className="p-4 bg-[#17212b] border-t border-[#232e3c]">
             <form onSubmit={handleSendMessage} className="flex items-center gap-3">
               <input
                 type="text"
                 value={newMessage}
-                onChange={handleInputChange}
-                placeholder="Write a message..."
+                onChange={(e) => setNewMessage(e.target.value)}
+                placeholder={`Message ${selectedGroup ? selectedGroup.name : selectedFriend.username}...`}
                 className="flex-1 bg-[#242f3d] text-white px-4 py-2 rounded-lg border border-[#232e3c] focus:outline-none focus:border-blue-500"
               />
               <button
@@ -201,11 +178,16 @@ function MessageSpace({ selectedFriend }) {
 
 MessageSpace.propTypes = {
   selectedFriend: PropTypes.shape({
-    userId: PropTypes.string.isRequired,
-    username: PropTypes.string.isRequired,
+    userId: PropTypes.string,
+    username: PropTypes.string,
     avatarUrl: PropTypes.string,
-    isOnline: PropTypes.number,
+    isOnline: PropTypes.bool,
     lastSeen: PropTypes.string
+  }),
+  selectedGroup: PropTypes.shape({
+    groupId: PropTypes.string,
+    name: PropTypes.string,
+    memberCount: PropTypes.number
   })
 };
 

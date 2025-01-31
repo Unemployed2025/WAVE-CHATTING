@@ -1,4 +1,3 @@
-
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
@@ -10,11 +9,11 @@ const register = async (req, res) => {
     try {
         const { username, email, password, fullName } = req.body;
         const userCheck = await pool.query(
-            'SELECT * FROM Users WHERE email = ? OR username = ?',
+            'SELECT * FROM Users WHERE email = $1 OR username = $2',
             [email, username]
         );
 
-        if (userCheck[0].length > 0) {
+        if (userCheck.rows.length > 0) {
             return res.status(400).json({ message: "User already exists" });
         }
 
@@ -23,7 +22,7 @@ const register = async (req, res) => {
 
         const userId = uuidv4();
         await pool.query(
-            'INSERT INTO Users (user_id,username,email,password_hash,full_name)VALUES (?, ?, ?, ?, ?)',
+            'INSERT INTO Users (user_id, username, email, password_hash, full_name) VALUES ($1, $2, $3, $4, $5)',
             [userId, username, email, hashedPassword, fullName]
         );
 
@@ -61,17 +60,17 @@ const login = async (req, res) => {
         const { email, password } = req.body;
         // console.log(email,password)
 
-        const [users] = await pool.query(
-            'SELECT * FROM Users WHERE email = ?',
+        const users = await pool.query(
+            'SELECT * FROM Users WHERE email = $1',
             [email]
         );
         // console.log(users);
 
-        if (users.length === 0) {
+        if (users.rows.length === 0) {
             return res.status(401).json({ message: "Invalid credentials" });
         }
 
-        const user = users[0];
+        const user = users.rows[0];
         // console.log(user);
 
         const validPassword = await bcrypt.compare(password, user.password_hash);
@@ -92,7 +91,7 @@ const login = async (req, res) => {
         };
         // Update last_seen and is_online
         await pool.query(
-            'UPDATE Users SET last_seen = NOW(), is_online = true WHERE user_id = ?',
+            'UPDATE Users SET last_seen = NOW(), is_online = true WHERE user_id = $1',
             [user.user_id]
         );
         res.cookie('token', token, cookieOptions);
@@ -118,7 +117,7 @@ const logout = async (req, res) => {
         const userId = req.user.user_id;
 
         await pool.query(
-            'UPDATE Users SET is_online = false, last_seen = NOW() WHERE user_id = ?',
+            'UPDATE Users SET is_online = false, last_seen = NOW() WHERE user_id = $1',
             [userId]
         );
 
@@ -151,38 +150,35 @@ const searchUsers = async (req, res) => {
             });
         }
 
-        const [users] = await pool.query(`
+        const users = await pool.query(`
             SELECT 
                 user_id,
                 username,
                 full_name,
                 avatar_url,
                 is_online,
-                (
-                    SELECT EXISTS(
-                        SELECT 1 FROM Friendships 
-                        WHERE (user_one_id = Users.user_id AND user_two_id = ?) 
-                        OR (user_two_id = Users.user_id AND user_one_id = ?)
-                    )
+                EXISTS(
+                    SELECT 1 FROM Friendships 
+                    WHERE (user_one_id = Users.user_id AND user_two_id = $1) 
+                    OR (user_two_id = Users.user_id AND user_one_id = $1)
                 ) as is_friend
             FROM Users 
             WHERE 
-                (username LIKE ? OR full_name LIKE ?) 
-                AND user_id != ? 
+                (username LIKE $2 OR full_name LIKE $3) 
+                AND user_id != $4 
                 AND deleted_at IS NULL 
                 AND is_active = true
             LIMIT 10
         `, [
             currentUserId,
-            currentUserId,
             `${query}%`,
             `${query}%`,
             currentUserId
         ]);
-
+        console.log(users.rows);
         res.status(200).json({
             success: true,
-            users: users.map(user => ({
+            users: users.rows.map(user => ({
                 userId: user.user_id,
                 username: user.username,
                 fullName: user.full_name,

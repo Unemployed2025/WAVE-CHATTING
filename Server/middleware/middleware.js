@@ -16,17 +16,17 @@ const verifyToken = async (req, res, next) => {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         
         // Check if user exists and is active
-        const [users] = await pool.query(
-            'SELECT user_id, username, email, full_name, is_active FROM Users WHERE user_id = ? AND deleted_at IS NULL',
+        const { rows } = await pool.query(
+            'SELECT user_id, username, email, full_name, is_active FROM users WHERE user_id = $1 AND deleted_at IS NULL',
             [decoded.user_id]
         );
 
-        if (!users.length || !users[0].is_active) {
+        if (!rows.length || !rows[0].is_active) {
             return res.status(401).json({ message: 'User not found or inactive' });
         }
 
         // Attach user to request object
-        req.user = users[0];
+        req.user = rows[0];
         next();
 
     } catch (error) {
@@ -51,13 +51,13 @@ const optionalAuth = async (req, res, next) => {
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         
-        const [users] = await pool.query(
-            'SELECT user_id, username, email, full_name, is_active FROM Users WHERE user_id = ? AND deleted_at IS NULL',
+        const { rows } = await pool.query(
+            'SELECT user_id, username, email, full_name, is_active FROM users WHERE user_id = $1 AND deleted_at IS NULL',
             [decoded.user_id]
         );
 
-        if (users.length && users[0].is_active) {
-            req.user = users[0];
+        if (rows.length && rows[0].is_active) {
+            req.user = rows[0];
         }
         next();
 

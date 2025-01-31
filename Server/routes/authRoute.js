@@ -12,8 +12,8 @@ passport.use(new GoogleStrategy({
 },
   async (accessToken, refreshToken, profile, done) => {
     try {
-      const [rows] = await pool.query(
-        'SELECT * FROM Users WHERE email = ? OR google_id = ?',
+      const { rows } = await pool.query(
+        'SELECT * FROM users WHERE email = $1 OR google_id = $2',
         [profile.emails[0].value, profile.id]
       );
 
@@ -23,7 +23,7 @@ passport.use(new GoogleStrategy({
         // Update google_id if not set
         if (!user.google_id) {
           await pool.query(
-            'UPDATE Users SET google_id = ? WHERE user_id = ?',
+            'UPDATE users SET google_id = $1 WHERE user_id = $2',
             [profile.id, user.user_id]
           );
         }
@@ -32,10 +32,10 @@ passport.use(new GoogleStrategy({
         const username = profile.displayName.replace(/\s+/g, '').toLowerCase() + Math.random().toString(36).slice(-4);
         const userId = uuidv4();
         await pool.query(
-          'INSERT INTO Users (user_id, username, email, full_name, google_id, avatar_url) VALUES (?,?,?,?,?,?)',
+          'INSERT INTO users (user_id, username, email, full_name, google_id, avatar_url) VALUES ($1, $2, $3, $4, $5, $6)',
           [userId, username, profile.emails[0].value, profile.displayName, profile.id, profile.photos[0]?.value]
         );
-        const [newUser] = await pool.query('SELECT * FROM Users WHERE user_id = ?', [userId]);
+        const { rows: newUser } = await pool.query('SELECT * FROM users WHERE user_id = $1', [userId]);
         user = newUser[0];
       }
       return done(null, user);
@@ -61,7 +61,7 @@ router.get('/google/callback',
     
     // Update user's online status
     await pool.query(
-      'UPDATE Users SET is_online = true WHERE user_id = ?',
+      'UPDATE users SET is_online = true WHERE user_id = $1',
       [user.user_id]
     );
     

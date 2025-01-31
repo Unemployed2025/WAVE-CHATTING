@@ -41,7 +41,7 @@ FriendCard.propTypes = {
     username: PropTypes.string.isRequired,
     fullName: PropTypes.string,
     avatarUrl: PropTypes.string,
-    isOnline: PropTypes.number,
+    isOnline: PropTypes.bool,
     lastSeen: PropTypes.string,
     lastMessage: PropTypes.string
   }).isRequired,

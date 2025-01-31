@@ -7,9 +7,7 @@ const getMessagesBetweenUsers = async (req, res) => {
         const currentUserId = req.user.user_id;
         const { friendId } = req.params;
         
-        // console.log(currentUserId, friendId);
-        // Find conversations between these users
-        const [messages] = await pool.query(`
+        const messages = await pool.query(`
             SELECT 
                 m.message_id,
                 m.content,
@@ -27,15 +25,15 @@ const getMessagesBetweenUsers = async (req, res) => {
             INNER JOIN Users u ON m.sender_id = u.user_id
             WHERE 
                 c.is_group_chat = false
-                AND cp1.user_id = ?
-                AND cp2.user_id = ?
+                AND cp1.user_id = $1
+                AND cp2.user_id = $2
                 AND m.deleted_at IS NULL
             ORDER BY m.created_at ASC
         `, [currentUserId, friendId]);
 
         res.status(200).json({
             success: true,
-            messages: messages.map(msg => ({
+            messages: messages.rows.map(msg => ({
                 messageId: msg.message_id,
                 content: msg.content,
                 isEdited: msg.is_edited,
@@ -61,59 +59,55 @@ const getMessagesBetweenUsers = async (req, res) => {
 
 //save message to database
 const saveMessage = async (senderId, recipientId, content) => {
+    const client = await pool.connect();
     try {
-        const connection = await pool.getConnection();
-        await connection.beginTransaction();
-        try {
-            // Find or create conversation
-            let [conversation] = await connection.query(`
-                SELECT c.conversation_id 
-                FROM Conversations c
-                INNER JOIN Conversation_Participants cp1 ON c.conversation_id = cp1.conversation_id
-                INNER JOIN Conversation_Participants cp2 ON c.conversation_id = cp2.conversation_id
-                WHERE c.is_group_chat = false
-                AND ((cp1.user_id = ? AND cp2.user_id = ?) 
-                OR (cp1.user_id = ? AND cp2.user_id = ?))
-                LIMIT 1
-            `, [senderId, recipientId, recipientId, senderId]);
+        await client.query('BEGIN');
 
-            let conversationId;
-            if (conversation.length === 0) {
-                // Create new conversation
-                conversationId = uuidv4();
-                await connection.query(
-                    'INSERT INTO Conversations (conversation_id, is_group_chat, created_by) VALUES (?, false, ?)',
-                    [conversationId, senderId]
-                );
+        // Find or create conversation
+        let conversation = await client.query(`
+            SELECT c.conversation_id 
+            FROM Conversations c
+            INNER JOIN Conversation_Participants cp1 ON c.conversation_id = cp1.conversation_id
+            INNER JOIN Conversation_Participants cp2 ON c.conversation_id = cp2.conversation_id
+            WHERE c.is_group_chat = false
+            AND ((cp1.user_id = $1 AND cp2.user_id = $2) 
+            OR (cp1.user_id = $2 AND cp2.user_id = $1))
+            LIMIT 1
+        `, [senderId, recipientId]);
 
-                // Add participants
-                await connection.query(
-                    'INSERT INTO Conversation_Participants (conversation_id, user_id) VALUES (?, ?), (?, ?)',
-                    [conversationId, senderId, conversationId, recipientId]
-                );
-            } else {
-                conversationId = conversation[0].conversation_id;
-            }
-
-            // Save message
-            const messageId = uuidv4();
-            await connection.query(
-                'INSERT INTO Messages (message_id, conversation_id, sender_id, content) VALUES (?, ?, ?, ?)',
-                [messageId, conversationId, senderId, content]
+        let conversationId;
+        if (conversation.rows.length === 0) {
+            // Create new conversation
+            conversationId = uuidv4();
+            await client.query(
+                'INSERT INTO Conversations (conversation_id, is_group_chat, created_by) VALUES ($1, false, $2)',
+                [conversationId, senderId]
             );
 
-            await connection.commit();
-            return messageId;
-
-        } catch (error) {
-            await connection.rollback();
-            throw error;
-        } finally {
-            connection.release();
+            // Add participants
+            await client.query(
+                'INSERT INTO Conversation_Participants (conversation_id, user_id) VALUES ($1, $2), ($1, $3)',
+                [conversationId, senderId, recipientId]
+            );
+        } else {
+            conversationId = conversation.rows[0].conversation_id;
         }
+
+        // Save message
+        const messageId = uuidv4();
+        await client.query(
+            'INSERT INTO Messages (message_id, conversation_id, sender_id, content) VALUES ($1, $2, $3, $4)',
+            [messageId, conversationId, senderId, content]
+        );
+
+        await client.query('COMMIT');
+        return messageId;
+
     } catch (error) {
-        console.error('Error saving message:', error);
+        await client.query('ROLLBACK');
         throw error;
+    } finally {
+        client.release();
     }
 };
 
@@ -123,32 +117,32 @@ const createGroup = async (req, res) => {
     const creatorId = req.user.user_id;
 
     try {
-        const connection = await pool.getConnection();
-        await connection.beginTransaction();
+        const client = await pool.connect();
+        await client.query('BEGIN');
 
         try {
             // Create new group conversation
             const conversationId = uuidv4();
-            await connection.query(
-                'INSERT INTO Conversations (conversation_id, name, is_group_chat, created_by) VALUES (?, ?, true, ?)',
+            await client.query(
+                'INSERT INTO Conversations (conversation_id, name, is_group_chat, created_by) VALUES ($1, $2, true, $3)',
                 [conversationId, groupName, creatorId]
             );
 
             // Add creator as admin
-            await connection.query(
-                'INSERT INTO Conversation_Participants (conversation_id, user_id, is_admin) VALUES (?, ?, true)',
+            await client.query(
+                'INSERT INTO Conversation_Participants (conversation_id, user_id, is_admin) VALUES ($1, $2, true)',
                 [conversationId, creatorId]
             );
 
             // Add other members
             for (const memberId of memberIds) {
-                await connection.query(
-                    'INSERT INTO Conversation_Participants (conversation_id, user_id) VALUES (?, ?)',
+                await client.query(
+                    'INSERT INTO Conversation_Participants (conversation_id, user_id) VALUES ($1, $2)',
                     [conversationId, memberId]
                 );
             }
 
-            await connection.commit();
+            await client.query('COMMIT');
 
             res.status(201).json({
                 success: true,
@@ -157,10 +151,10 @@ const createGroup = async (req, res) => {
             });
 
         } catch (error) {
-            await connection.rollback();
+            await client.query('ROLLBACK');
             throw error;
         } finally {
-            connection.release();
+            client.release();
         }
 
     } catch (error) {
@@ -179,12 +173,12 @@ const getGroupMessages = async (req, res) => {
         const { groupId } = req.params;
 
         // Verify user is a member of the group
-        const [membership] = await pool.query(`
+        const membership = await pool.query(`
             SELECT 1 FROM Conversation_Participants 
-            WHERE conversation_id = ? AND user_id = ? AND left_at IS NULL
+            WHERE conversation_id = $1 AND user_id = $2 AND left_at IS NULL
         `, [groupId, currentUserId]);
 
-        if (membership.length === 0) {
+        if (membership.rows.length === 0) {
             return res.status(403).json({
                 success: false,
                 message: "You are not a member of this group"
@@ -192,7 +186,7 @@ const getGroupMessages = async (req, res) => {
         }
 
         // Get messages
-        const [messages] = await pool.query(`
+        const messages = await pool.query(`
             SELECT 
                 m.message_id,
                 m.content,
@@ -205,13 +199,13 @@ const getGroupMessages = async (req, res) => {
                 u.avatar_url as sender_avatar
             FROM Messages m
             INNER JOIN Users u ON m.sender_id = u.user_id
-            WHERE m.conversation_id = ? AND m.deleted_at IS NULL
+            WHERE m.conversation_id = $1 AND m.deleted_at IS NULL
             ORDER BY m.created_at ASC
         `, [groupId]);
 
         res.status(200).json({
             success: true,
-            messages: messages.map(msg => ({
+            messages: messages.rows.map(msg => ({
                 messageId: msg.message_id,
                 content: msg.content,
                 isEdited: msg.is_edited,
@@ -243,12 +237,12 @@ const sendGroupMessage = async (req, res) => {
         const { content } = req.body;
 
         // Verify user is a member of the group
-        const [membership] = await pool.query(`
+        const membership = await pool.query(`
             SELECT 1 FROM Conversation_Participants 
-            WHERE conversation_id = ? AND user_id = ? AND left_at IS NULL
+            WHERE conversation_id = $1 AND user_id = $2 AND left_at IS NULL
         `, [groupId, senderId]);
 
-        if (membership.length === 0) {
+        if (membership.rows.length === 0) {
             return res.status(403).json({
                 success: false,
                 message: "You are not a member of this group"
@@ -258,7 +252,7 @@ const sendGroupMessage = async (req, res) => {
         // Save message
         const messageId = uuidv4();
         await pool.query(
-            'INSERT INTO Messages (message_id, conversation_id, sender_id, content) VALUES (?, ?, ?, ?)',
+            'INSERT INTO Messages (message_id, conversation_id, sender_id, content) VALUES ($1, $2, $3, $4)',
             [messageId, groupId, senderId, content]
         );
 
@@ -282,7 +276,7 @@ const getUserGroups = async (req, res) => {
     try {
         const currentUserId = req.user.user_id;
 
-        const [groups] = await pool.query(`
+        const groups = await pool.query(`
             SELECT 
                 c.conversation_id,
                 c.name,
@@ -296,16 +290,16 @@ const getUserGroups = async (req, res) => {
             INNER JOIN Conversation_Participants cp2 ON c.conversation_id = cp2.conversation_id
             INNER JOIN Users u ON c.created_by = u.user_id
             WHERE c.is_group_chat = true
-                AND cp1.user_id = ?
+                AND cp1.user_id = $1
                 AND cp1.left_at IS NULL
                 AND cp2.left_at IS NULL
-            GROUP BY c.conversation_id
+            GROUP BY c.conversation_id, u.username, u.avatar_url
             ORDER BY c.created_at DESC
         `, [currentUserId]);
-
+        
         res.status(200).json({
             success: true,
-            groups: groups.map(group => ({
+            groups: groups.rows.map(group => ({
                 groupId: group.conversation_id,
                 name: group.name,
                 createdAt: group.created_at,
@@ -318,6 +312,7 @@ const getUserGroups = async (req, res) => {
             }))
         });
 
+
     } catch (error) {
         res.status(500).json({
             success: false,
@@ -327,18 +322,19 @@ const getUserGroups = async (req, res) => {
     }
 };
 
+// Get group members
 const getGroupMembers = async (req, res) => {
     try {
         const currentUserId = req.user.user_id;
         const { groupId } = req.params;
 
         // Verify user is a member
-        const [membership] = await pool.query(`
+        const membership = await pool.query(`
             SELECT 1 FROM Conversation_Participants 
-            WHERE conversation_id = ? AND user_id = ? AND left_at IS NULL
+            WHERE conversation_id = $1 AND user_id = $2 AND left_at IS NULL
         `, [groupId, currentUserId]);
 
-        if (membership.length === 0) {
+        if (membership.rows.length === 0) {
             return res.status(403).json({
                 success: false,
                 message: "You are not a member of this group"
@@ -346,7 +342,7 @@ const getGroupMembers = async (req, res) => {
         }
 
         // Get all members
-        const [members] = await pool.query(`
+        const members = await pool.query(`
             SELECT 
                 u.user_id,
                 u.username,
@@ -354,13 +350,13 @@ const getGroupMembers = async (req, res) => {
                 cp.is_admin
             FROM Conversation_Participants cp
             INNER JOIN Users u ON cp.user_id = u.user_id
-            WHERE cp.conversation_id = ? AND cp.left_at IS NULL
+            WHERE cp.conversation_id = $1 AND cp.left_at IS NULL
             ORDER BY cp.is_admin DESC, u.username ASC
         `, [groupId]);
 
         res.status(200).json({
             success: true,
-            members: members.map(member => ({
+            members: members.rows.map(member => ({
                 userId: member.user_id,
                 username: member.username,
                 avatarUrl: member.avatar_url,

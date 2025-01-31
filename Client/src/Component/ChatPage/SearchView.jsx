@@ -26,17 +26,8 @@ function SearchView({ onBack }) {
       try {
         const response = await userAPI.searchUsers(query);
         if (response.success && Array.isArray(response.users)) {
-          // Check friendship status for each user
-          const usersWithStatus = await Promise.all(
-            response.users.map(async (user) => {
-              const status = await friendAPI.checkFriendshipStatus(user.userId);
-              return {
-                ...user,
-                friendshipStatus: status
-              };
-            })
-          );
-          setSearchResults(usersWithStatus);
+          console.log(response);
+          setSearchResults(response.users);
         }
       } catch (error) {
         console.error('Search error:', error);
@@ -55,10 +46,7 @@ function SearchView({ onBack }) {
       setSearchResults(prev =>
         prev.map(user =>
           user.userId === userId
-            ? {
-              ...user,
-              friendshipStatus: { pendingRequest: { status: 'pending', isSender: true } }
-            }
+            ? { ...user, isFriend: true }
             : user
         )
       );
@@ -128,12 +116,8 @@ function SearchView({ onBack }) {
                       <h3 className="text-white text-sm font-medium">{user.username}</h3>
                       <p className="text-gray-400 text-xs">{user.fullName}</p>
                     </div>
-                    {user.friendshipStatus.isFriend ? (
+                    {user.isFriend ? (
                       <span className="text-xs text-blue-400 bg-blue-500/10 px-2 py-1 rounded">Friends</span>
-                    ) : user.friendshipStatus.pendingRequest ? (
-                      <span className="text-xs text-gray-400 bg-gray-500/10 px-2 py-1 rounded">
-                        {user.friendshipStatus.pendingRequest.isSender ? 'Pending' : 'Respond'}
-                      </span>
                     ) : (
                       <button
                         onClick={() => handleSendRequest(user.userId)}

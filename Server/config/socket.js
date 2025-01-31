@@ -76,7 +76,7 @@ function initSocket(httpServer) {
                 // Save message to database
                 const messageId = uuidv4();
                 await pool.query(
-                    'INSERT INTO Messages (message_id, conversation_id, sender_id, content) VALUES (?, ?, ?, ?)',
+                    'INSERT INTO messages (message_id, conversation_id, sender_id, content) VALUES ($1, $2, $3, $4)',
                     [messageId, groupId, socket.userId, message.content]
                 );
 
