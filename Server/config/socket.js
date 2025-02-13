@@ -1,5 +1,6 @@
 const { Server } = require('socket.io');
 const { saveMessage } = require('../controllers/messageController');
+const {v4:uuid} = require('uuid')
 
 function initSocket(httpServer) {
     const io = new Server(httpServer, {
